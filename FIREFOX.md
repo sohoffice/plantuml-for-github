@@ -22,7 +22,7 @@ store's submission stays simple.
 
 Mozilla's AMO linter (`addons-linter`) refuses to parse JavaScript
 files larger than 5 MB. Our TeaVM-compiled `vendor/plantuml.js` weighs
-about 24 MB (non-minified, kept readable for AMO reviewers), so a
+about 15 MB (non-minified, kept readable for AMO reviewers), so a
 naive submission is rejected at upload time with the error
 `File is too large to parse`.
 
@@ -55,8 +55,14 @@ All commands are run from the repository root.
 python split_plantuml.py
 ```
 
-This reads `vendor/plantuml.js` and produces seven files in the same
-directory: `plantuml.0.js` through `plantuml.6.js`, each about 3.9 MB.
+This reads `vendor/plantuml.js` and produces four files in the same
+directory: `plantuml.0.js` through `plantuml.3.js`, each under 4 MB.
+
+The chunk count is not fixed: it follows the size of the unminified
+build. It was seven when the engine was ~25 MB and is four at ~15 MB.
+If a rebuild changes the count, update the `<script>` tags in
+`template/renderer.html` (then re-run `template.py`) and the explicit
+file list in `build_zip_firefox.py` to match — both hardcode it.
 The script reports the size of every chunk and warns if any exceeds
 the 4 MB target.
 
@@ -91,14 +97,14 @@ root, where `<version>` is read from `manifest.json`. The script:
 
 - Includes only the files needed at runtime (`manifest.json`,
   `content.js`, `renderer.html`, `renderer.js`, `LICENSE`, the icons,
-  the seven engine chunks, and `viz-global.js`).
+  the engine chunks, and `viz-global.js`).
 - Explicitly excludes `vendor/plantuml.js` (the unchunked original),
   `vendor/plantuml.js.gz` (a leftover from earlier experiments), and
   `vendor/plantuml.filtered.js` (an analysis artifact).
 - Uses forward slashes in all archive paths (PowerShell's
   `Compress-Archive` writes backslashes on some Windows builds, which
   AMO rejects with `Invalid file name in archive`).
-- Refuses to write the archive if any of the seven chunks is missing
+- Refuses to write the archive if any listed chunk is missing
   or if any included JS file exceeds 5 MB.
 
 A successful run ends with
@@ -162,9 +168,9 @@ note" to save the reviewer time.
 | File | Role |
 |---|---|
 | `manifest.json` | Adds `browser_specific_settings.gecko` for Firefox |
-| `renderer.html` | Loads the seven engine chunks before `renderer.js` |
+| `renderer.html` | Loads the engine chunks in order before `renderer.js` |
 | `renderer.js` | Reads the API from `window.__plantuml` synchronously |
-| `vendor/plantuml.0.js` ... `plantuml.6.js` | The pre-split engine |
+| `vendor/plantuml.0.js` ... `plantuml.3.js` | The pre-split engine |
 | `split_plantuml.py` | Produces the chunks from `vendor/plantuml.js` |
 | `build_zip.py` | Packages the extension into a Firefox-ready ZIP |
 | `FIREFOX.md` | This file |
