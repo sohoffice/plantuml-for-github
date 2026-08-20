@@ -2,9 +2,16 @@
 
 Renders ` ```plantuml ` code blocks directly on GitHub pages, using the
 TeaVM-compiled PlantUML engine that runs entirely client-side.
-Available for **Chrome** and **Firefox**.
+
+**Now with salt (wireframe) support.** `@startsalt` blocks render inline like
+any other diagram — the upstream browser engine omits the salt factory
+entirely and paints an error card instead. Everything else PlantUML renders in
+the browser is here too; see [Supported diagrams](#supported-diagrams).
 
 **No server. No tokens. No tracking. Zero permissions.**
+
+> Not published to the Chrome Web Store or Firefox Add-ons.
+> Install locally from a checkout — see [Install](#install).
 
 ---
 
@@ -15,7 +22,7 @@ Available for **Chrome** and **Firefox**.
 - [Live demo](#live-demo)
 - [How it works](#how-it-works)
 - [Security & permissions](#security--permissions)
-- [Build from source](#build-from-source)
+- [Development](#development)
 - [Roadmap](#roadmap)
 - [Why this extension exists](#why-this-extension-exists)
 - [License](#license)
@@ -24,14 +31,28 @@ Available for **Chrome** and **Firefox**.
 
 ## Install
 
-| Browser | Link |
-| --- | --- |
-| Chrome | [Chrome Web Store](https://chromewebstore.google.com/detail/plantuml-for-github/lbokhidfopkdehkmlmpaabacljoediic) |
-| Firefox | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plantuml-for-github/) |
+Clone the repository, then load the target's folder unpacked. There is nothing
+to build — `Chrome/` and `Firefox/` are committed ready to load.
+
+### Chrome
+
+1. Open `chrome://extensions/`
+2. Toggle **Developer mode** on (top-right)
+3. Click **Load unpacked**
+4. Select the **`Chrome/`** subfolder — not the repository root
+
+After a rebuild, hit **↻** on the extension card, then hard-reload the GitHub tab.
+
+### Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on…**
+3. Select **`Firefox/manifest.json`**
+
+Temporary add-ons are removed when Firefox restarts, so this needs redoing each
+session.
 
 Recognised fence languages: `plantuml`, `puml`, `wsd`.
-
-For a local checkout, see [Build from source](#build-from-source).
 
 ---
 
@@ -44,13 +65,13 @@ its own factory list, so not every `@start…` type is available.
 
 | Type | Opens with | Layout |
 | --- | --- | --- |
+| **Salt (wireframes)** | **`@startsalt`** | **native** |
 | Sequence | `@startuml` | native |
 | Class / object | `@startuml` | Graphviz |
 | Activity | `@startuml` | native |
 | State | `@startuml` | Graphviz |
 | Component / deployment / use case | `@startuml` | Graphviz |
 | Timing | `@startuml` | native |
-| **Salt (wireframes)** | **`@startsalt`** | **native** |
 | Gantt | `@startgantt` · `@startproject` | native |
 | Mindmap | `@startmindmap` | native |
 | WBS | `@startwbs` | native |
@@ -83,14 +104,7 @@ same way in upstream PlantUML, so this is not a limitation of the extension:
 
 ## Live demo
 
-With the extension active, these render inline:
-
-```plantuml
-@startuml
-Alice -> Bob: hello
-Bob --> Alice: hi
-@enduml
-```
+With the extension active, this renders inline as a wireframe:
 
 ```plantuml
 @startsalt
@@ -106,7 +120,7 @@ Bob --> Alice: hi
 @endsalt
 ```
 
-To try it yourself, put either block in an issue, discussion, or README in a
+To try it yourself, put that block in an issue, discussion, or README in a
 repo you own, then reload the page.
 
 ---
@@ -128,10 +142,10 @@ This is the same architecture GitHub already uses for Mermaid.
 
 ## Security & permissions
 
-The extension declares **zero Chrome permissions** — no host permissions, no
-storage, no tabs API. It ships a content script scoped to `github.com` and a
-packaged renderer page. The engine runs inside a sandboxed iframe with an
-opaque origin, no network access, and no shared state with the host page.
+The extension declares **zero permissions** — no host permissions, no storage,
+no tabs API. It ships a content script scoped to `github.com` and a packaged
+renderer page. The engine runs inside a sandboxed iframe with an opaque origin,
+no network access, and no shared state with the host page.
 
 One deviation from the Manifest V3 default CSP is required:
 
@@ -141,7 +155,7 @@ One deviation from the Manifest V3 default CSP is required:
 }
 ```
 
-Sequence and salt diagrams render straight to SVG, but anything needing graph
+Salt and sequence diagrams render straight to SVG, but anything needing graph
 layout — class, component, deployment, state, use-case — is laid out by
 **Graphviz, shipped as a WebAssembly module** (`viz-global.js`). Instantiating
 it requires `'wasm-unsafe-eval'`.
@@ -153,16 +167,7 @@ supported way to ship WASM in MV3.
 
 ---
 
-## Build from source
-
-### Chrome (developer mode)
-
-1. Open `chrome://extensions/`
-2. Toggle **Developer mode** on (top-right)
-3. Click **Load unpacked**
-4. Select the **`Chrome/`** subfolder — not the repository root
-
-Reload the extension card after any rebuild, then hard-reload the GitHub tab.
+## Development
 
 ### Repository layout
 
@@ -179,7 +184,15 @@ After editing anything in `template/`, run:
 python3 template.py
 ```
 
-### Packaging
+### Engine bundles
+
+The two targets vendor **different builds of the same engine**: Chrome loads
+one minified ES module, Firefox loads an unminified build pre-split into
+chunks. [FIREFOX.md](FIREFOX.md) explains why and how to regenerate them.
+
+### Packaging (optional)
+
+ZIPs are not needed for local install, but the builders still work:
 
 ```bash
 python3 build_zip_chrome.py
@@ -188,10 +201,6 @@ python3 build_zip_chrome.py
 ```bash
 python3 build_zip_firefox.py
 ```
-
-Chrome ships the engine as one minified ES module. Firefox needs an
-**unminified** build split into chunks under AMO's 5 MB per-file limit — see
-[FIREFOX.md](FIREFOX.md), which also covers AMO submission.
 
 ---
 
@@ -202,7 +211,6 @@ Chrome ships the engine as one minified ES module. Firefox needs an
 - [x] Copy as SVG / bitmap, source toggle, edit as draft
 - [x] Theme matching (light/dark) — follows GitHub's color mode
 - [x] `puml` and `wsd` language aliases
-- [x] Chrome Web Store publication
 - [x] Salt (wireframe) diagrams
 - [ ] Options page (toggle, performance settings)
 
