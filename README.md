@@ -1,18 +1,89 @@
 # PlantUML for GitHub
 
-A Chrome extension that renders ` ```plantuml ` code blocks directly on GitHub pages, using the TeaVM-compiled PlantUML engine that runs entirely client-side.
+Renders ` ```plantuml ` code blocks directly on GitHub pages, using the
+TeaVM-compiled PlantUML engine that runs entirely client-side.
+Available for **Chrome** and **Firefox**.
 
 **No server. No tokens. No tracking. Zero permissions.**
 
-## Installation
+---
 
-- From the [Chrome Web Store](https://chromewebstore.google.com/detail/plantuml-for-github/lbokhidfopkdehkmlmpaabacljoediic)
-- From the [Firefox Add-ons Catalog](https://addons.mozilla.org/en-US/firefox/addon/plantuml-for-github/)
+## Contents
 
+- [Install](#install)
+- [Supported diagrams](#supported-diagrams)
+- [Live demo](#live-demo)
+- [How it works](#how-it-works)
+- [Security & permissions](#security--permissions)
+- [Build from source](#build-from-source)
+- [Roadmap](#roadmap)
+- [Why this extension exists](#why-this-extension-exists)
+- [License](#license)
+
+---
+
+## Install
+
+| Browser | Link |
+| --- | --- |
+| Chrome | [Chrome Web Store](https://chromewebstore.google.com/detail/plantuml-for-github/lbokhidfopkdehkmlmpaabacljoediic) |
+| Firefox | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plantuml-for-github/) |
+
+Recognised fence languages: `plantuml`, `puml`, `wsd`.
+
+For a local checkout, see [Build from source](#build-from-source).
+
+---
+
+## Supported diagrams
+
+The bundled engine is a subset of full PlantUML — the browser build registers
+its own factory list, so not every `@start…` type is available.
+
+### Rendered
+
+| Type | Opens with | Layout |
+| --- | --- | --- |
+| Sequence | `@startuml` | native |
+| Class / object | `@startuml` | Graphviz |
+| Activity | `@startuml` | native |
+| State | `@startuml` | Graphviz |
+| Component / deployment / use case | `@startuml` | Graphviz |
+| Timing | `@startuml` | native |
+| **Salt (wireframes)** | **`@startsalt`** | **native** |
+| Gantt | `@startgantt` · `@startproject` | native |
+| Mindmap | `@startmindmap` | native |
+| WBS | `@startwbs` | native |
+| Network | `@startnwdiag` | native |
+| Packet | `@startpacketdiag` | native |
+| JSON | `@startjson` | native |
+| YAML | `@startyaml` | native |
+| EBNF | `@startebnf` | native |
+| Regex | `@startregex` | native |
+| Chart | `@startchart` | native |
+| Creole | `@startcreole` | native |
+
+### Not available in the browser build
+
+`@startditaa`, `@startjcckit`, `@startmath`, `@startlatex`, `@startwire`,
+`@startboard`, `@startflow`, `@startgit`, `@starthcl`, `@startchen`,
+`@startbpm`, `@startchronology`, `@startfiles`, `@startdot`.
+
+These render an error card rather than a diagram.
+
+### Salt notes
+
+`@startsalt` must open the block. Two forms **do not** work — both fail the
+same way in upstream PlantUML, so this is not a limitation of the extension:
+
+- `@startuml` followed by a `salt` line
+- `{{ salt … }}` embedded in a note or label
+
+---
 
 ## Live demo
 
-With the extension installed and active, the block below should render as a sequence diagram:
+With the extension active, these render inline:
 
 ```plantuml
 @startuml
@@ -21,25 +92,48 @@ Bob --> Alice: hi
 @enduml
 ```
 
+```plantuml
+@startsalt
+{+
+  {* File | Edit | Help }
+  {
+    Name     | "                    "
+    Password | "                    "
+    [X] Remember me
+  }
+  [Cancel] | [   OK   ]
+}
+@endsalt
+```
+
+To try it yourself, put either block in an issue, discussion, or README in a
+repo you own, then reload the page.
+
+---
+
 ## How it works
 
-1. The extension's content script scans every GitHub page for `plantuml` code blocks.
+1. A content script scans each GitHub page for `plantuml` code blocks.
 2. Each block is replaced with a sandboxed `<iframe>` packaged inside the extension.
-3. The iframe loads the TeaVM-compiled `plantuml.js` engine and renders the diagram to SVG.
-4. The result is displayed inline in the page, inside a small wrapper with a header bar.
-5. The header bar shows a **toggle button** (top-left of the wrapper) that switches between the rendered diagram and the original PlantUML source. The source view uses GitHub's own syntax highlighting, so it looks exactly as it would without the extension installed.
+3. The iframe loads the TeaVM-compiled `plantuml.js` engine and renders to SVG.
+4. The SVG is displayed inline, inside a wrapper with a header bar.
 
-This is the same architecture GitHub already uses for Mermaid — proving that client-side PlantUML can be integrated natively with zero infrastructure cost.
+The header bar offers a **source toggle** (`<>`), **Copy as bitmap / SVG**
+(also on right-click), and **Edit as draft** — a two-column editor with live
+preview. See [HISTORY.md](HISTORY.md) for the full feature log.
+
+This is the same architecture GitHub already uses for Mermaid.
+
+---
 
 ## Security & permissions
 
-The extension declares **zero Chrome permissions** (no host permissions, no
-storage, no tabs API). It only ships a content script scoped to `github.com`
-and a packaged renderer page.
+The extension declares **zero Chrome permissions** — no host permissions, no
+storage, no tabs API. It ships a content script scoped to `github.com` and a
+packaged renderer page. The engine runs inside a sandboxed iframe with an
+opaque origin, no network access, and no shared state with the host page.
 
-One thing worth calling out is the extension's Content Security Policy. The
-Manifest V3 default CSP for extension pages is essentially `script-src 'self'`,
-which blocks WebAssembly. We need to relax it slightly:
+One deviation from the Manifest V3 default CSP is required:
 
 ```json
 "content_security_policy": {
@@ -47,75 +141,87 @@ which blocks WebAssembly. We need to relax it slightly:
 }
 ```
 
-Why? PlantUML renders sequence diagrams directly to SVG, but anything that
-needs graph layout — **class, component, deployment, state, use-case, and
-activity diagrams** — is laid out by the embedded **Graphviz engine, which
-ships as a WebAssembly module** (`viz-global.js`). Instantiating that module
-requires the `'wasm-unsafe-eval'` CSP source.
+Sequence and salt diagrams render straight to SVG, but anything needing graph
+layout — class, component, deployment, state, use-case — is laid out by
+**Graphviz, shipped as a WebAssembly module** (`viz-global.js`). Instantiating
+it requires `'wasm-unsafe-eval'`.
 
-`'wasm-unsafe-eval'` is a narrowly scoped directive: despite the scary name,
-it **only** allows WebAssembly compilation and instantiation. It does **not**
-re-enable `eval()` or `new Function()` — those remain blocked. No remote
-scripts can be loaded either; `script-src 'self'` still applies. Google
-documents this directive as the supported way to ship WASM in MV3 extensions.
+Despite the name, that directive **only** permits WebAssembly compilation and
+instantiation. It does not re-enable `eval()` or `new Function()`, and
+`script-src 'self'` still blocks all remote scripts. Google documents it as the
+supported way to ship WASM in MV3.
 
-In short: the engine runs entirely inside a sandboxed iframe with an opaque
-origin, with no network access and no shared state with the host page.
+---
 
-## Testing without a real GitHub page
+## Build from source
 
-To test quickly, create a new issue or discussion in any repo you own with this content:
+### Chrome (developer mode)
 
-````markdown
-```plantuml
-@startuml
-Alice -> Bob: hello
-Bob --> Alice: hi
-@enduml
+1. Open `chrome://extensions/`
+2. Toggle **Developer mode** on (top-right)
+3. Click **Load unpacked**
+4. Select the **`Chrome/`** subfolder — not the repository root
+
+Reload the extension card after any rebuild, then hard-reload the GitHub tab.
+
+### Repository layout
+
+| Path | Role |
+| --- | --- |
+| `template/` | Single source for `content.js`, `renderer.js`, `renderer.html`, `manifest.json` |
+| `template.py` | Preprocesses `#if CHROME` / `#if FIREFOX` into `Chrome/` and `Firefox/` |
+| `Chrome/`, `Firefox/` | **Generated** — never edit directly |
+| `*/vendor/` | Engine bundles, placed per target by hand |
+
+After editing anything in `template/`, run:
+
+```bash
+python3 template.py
 ```
-````
 
-Save it, then reload the page. The diagram should appear.
+### Packaging
+
+```bash
+python3 build_zip_chrome.py
+```
+
+```bash
+python3 build_zip_firefox.py
+```
+
+Chrome ships the engine as one minified ES module. Firefox needs an
+**unminified** build split into chunks under AMO's 5 MB per-file limit — see
+[FIREFOX.md](FIREFOX.md), which also covers AMO submission.
+
+---
 
 ## Roadmap
 
 - [x] MVP: detect and render `plantuml` blocks
-- [X] Firefox support (Manifest V3 is now supported in Firefox)
-- [X] "Copy SVG" / "Copy source" buttons
+- [x] Firefox support (Manifest V3)
+- [x] Copy as SVG / bitmap, source toggle, edit as draft
 - [x] Theme matching (light/dark) — follows GitHub's color mode
-- [x] Support `puml` and `wsd` language aliases
+- [x] `puml` and `wsd` language aliases
+- [x] Chrome Web Store publication
+- [x] Salt (wireframe) diagrams
 - [ ] Options page (toggle, performance settings)
-- [X] Chrome Web Store publication
+
+---
 
 ## Why this extension exists
 
 PlantUML support on GitHub has been requested for 4+ years:
 <https://github.com/orgs/community/discussions/10111>
 
-The main blocker was performance and infrastructure cost. With the TeaVM-compiled engine, **that blocker no longer exists**. This extension demonstrates that PlantUML can run natively on GitHub.com with zero server-side changes — using the exact same sandbox pattern GitHub uses for Mermaid.
+The blocker was performance and infrastructure cost. With the TeaVM-compiled
+engine, **that blocker no longer exists** — PlantUML runs natively on
+github.com with zero server-side changes, using the same sandbox pattern
+GitHub already uses for Mermaid.
 
-If you'd like to see this integrated natively, please **upvote the discussion**:
-<https://github.com/orgs/community/discussions/10111>
+If you'd like to see this integrated natively, please **upvote the
+discussion** linked above.
 
-## Installation for Chrome (developer mode)
-
-### Step 1 — Load the extension in Chrome
-
-1. Open `chrome://extensions/`
-2. Toggle **Developer mode** on (top-right)
-3. Click **Load unpacked**
-4. Select the `plantuml-for-github/` folder
-
-### Step 2 — Test it
-
-Visit any GitHub page containing a ` ```plantuml ` block, for example:
-
-- A README that uses PlantUML
-- An issue or PR comment with a `plantuml` fenced block
-
-You should see the diagram rendered inline, with a small "🌱 PlantUML (client-side render)" badge above it. Click the toggle button (the `<>` icon to the left of the badge) to switch to the original source view; click it again (it now shows an eye icon) to switch back to the diagram.
-
-
+---
 
 ## License
 
